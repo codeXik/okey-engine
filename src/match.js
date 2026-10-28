@@ -1,4 +1,4 @@
-import { OkeyHand } from './hand.js';
+import { loadHand, newHand } from './hand101.js';
 import { defaultRandom } from './tiles.js';
 import { withDefaults, assertPlayable } from './settings.js';
 import { TEAM_SEATS, teamOf } from './teams.js';
@@ -18,7 +18,8 @@ export class OkeyMatch {
     assertPlayable(this.settings);
     this.rng = rng;
     this.dealer = dealer;
-    this.scores = [0, 1, 2, 3].map(() => this.settings.startScore);
+    // 101 okey counts penalty points up from 0 (the lowest total wins); the other kinds count down from startScore
+    this.scores = [0, 1, 2, 3].map(() => (this.settings.variant === '101' ? 0 : this.settings.startScore));
     this.rounds = []; // [{ dealer, winner, reason, mode, okeyFinish, pair, fromHand, deltas }]
     this.winner = -1;
     this.hand = null;
@@ -58,14 +59,15 @@ export class OkeyMatch {
 
   // Seats from first to last place: [{ seat, score, place }]; equal scores share a place.
   get standings() {
-    const order = [0, 1, 2, 3].sort((a, b) => this.scores[b] - this.scores[a] || a - b);
-    return order.map((seat) => ({ seat, score: this.scores[seat], place: 1 + this.scores.filter((s) => s > this.scores[seat]).length }));
+    const dir = this.settings.variant === '101' ? -1 : 1; // 101: fewer penalty points are better
+    const order = [0, 1, 2, 3].sort((a, b) => dir * (this.scores[b] - this.scores[a]) || a - b);
+    return order.map((seat) => ({ seat, score: this.scores[seat], place: 1 + this.scores.filter((s) => dir * s > dir * this.scores[seat]).length }));
   }
 
   startRound() {
     if (this.over) throw new Error('The match is over');
     if (this.hand && !this.counted) throw new Error('The round is not finished');
-    this.hand = new OkeyHand({ dealer: this.dealer, rng: this.rng, settings: this.settings });
+    this.hand = newHand({ dealer: this.dealer, rng: this.rng, settings: this.settings });
     this.counted = false;
     return this.hand;
   }
@@ -84,6 +86,12 @@ export class OkeyMatch {
     });
     this.dealer = (this.dealer + 1) % 4;
     const maxed = this.settings.maxRounds > 0 && this.rounds.length >= this.settings.maxRounds;
+    if (this.settings.variant === '101') {
+      const low = Math.min(...this.scores);
+      const out = this.settings.matchEndScore > 0 && Math.max(...this.scores) >= this.settings.matchEndScore;
+      if ((out || maxed) && this.scores.filter((s) => s === low).length === 1) this.winner = this.scores.indexOf(low);
+      return { over: this.over, winner: this.winner, scores: this.scores.slice() };
+    }
     if (this.esli) {
       const ts = this.teamScores;
       if ((Math.min(...ts) <= this.settings.teamEndScore || maxed) && ts[0] !== ts[1]) this.winner = ts[0] > ts[1] ? 0 : 1;
@@ -118,7 +126,7 @@ export class OkeyMatch {
     if (!ok) throw new Error('Save is inconsistent');
     const copy = JSON.parse(JSON.stringify({ scores: data.scores, rounds: data.rounds }));
     Object.assign(m, { scores: copy.scores, rounds: copy.rounds, winner: data.winner, counted: data.counted });
-    m.hand = data.hand ? OkeyHand.fromJSON(data.hand) : null;
+    m.hand = data.hand ? loadHand(data.hand) : null;
     if (m.counted && !(m.hand && m.hand.over)) throw new Error('Save is inconsistent');
     return m;
   }

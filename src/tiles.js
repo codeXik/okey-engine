@@ -52,15 +52,15 @@ export function meaning(t, okey) {
 }
 
 // Deals one round: the indicator is turned up (a false joker is never the indicator), the starting seat gets 15
-// tiles, the others 14, and what is left (48 tiles) is the draw pile.
-export function dealRound(rng = defaultRandom, starter = 1) {
+// tiles, the others 14, and what is left (48 tiles) is the draw pile. (101 okey: 22 and 21, a pile of 20.)
+export function dealRound(rng = defaultRandom, starter = 1, { first = 15, others = 14 } = {}) {
   const pile = shuffle(makeTiles(), rng);
   const at = pile.findIndex((t) => !isFake(t));
   const indicator = pile.splice(at, 1)[0];
   const hands = [0, 1, 2, 3].map(() => []);
   for (let i = 0; i < 4; i++) {
     const seat = (starter + i) % 4;
-    hands[seat] = pile.splice(0, i === 0 ? 15 : 14);
+    hands[seat] = pile.splice(0, i === 0 ? first : others);
   }
   return { hands, deck: pile, indicator };
 }

@@ -15,7 +15,7 @@ Motor şunları yapar:
 
 Masadan masaya değişen her kural ayardan seçilebilir (aşağıda "Ayarlar" bölümüne bakın).
 
-**Sürüm durumu:** klasik okey ve eşli okey (2'ye 2) hazır (1.2.0). 101 okey sırada; motor ona göre kuruldu ama henüz oynanamaz.
+**Sürüm durumu:** klasik okey, eşli okey (2'ye 2) ve 101 okey hazır (1.3.0). Eşli 101 ve çevrim içi sırada.
 
 ## Hızlı başlangıç
 
@@ -125,6 +125,50 @@ console.log(oyun.winnerTeam, oyun.winners, oyun.teamScores);   // örneğin 1, [
 
 Bir takımın puanı, iki oyuncusunun puanının toplamıdır; bir takım `teamEndScore` (varsayılan 0) puana ya da altına inince oyun biter ve toplamı yüksek olan takım kazanır. Oyuncunun görünümünde (`view`) eşinin taşları da yer almaz. `teamOf(koltuk)`, `partnerOf(koltuk)` ve `TEAM_SEATS` dışa açılmıştır. Kayıt, yükleme ve `act` klasikteki gibi çalışır.
 
+## 101 okey
+
+`variant: '101'` ayarıyla oynanır (4 kişi, herkes kendi başına). Başlayan 22, ötekiler 21 taş alır, deste 20 taştır. Kurallar [docs/KURALLAR.md](docs/KURALLAR.md) dosyasında; özet: elini açmak için perlerle serilerin toplamı en az 101 puan olmalı (ya da 5 çift), açan oyuncu masadaki herkesin gruplarına taş işleyebilir ve joker yerine gerçek taşı koyup jokeri alabilir, ceza puanı biriktirilir ve en az ceza alan kazanır.
+
+```js
+import { newHand, OkeyMatch, botStep } from './src/index.js';
+
+const el = newHand({ dealer: 0, settings: { variant: '101' } });   // Okey101Hand
+while (!el.over) botStep(el, { level: 'normal' });                 // her çağrı bir hamle (çek, aç, işle, at)
+console.log(el.result.winner, el.scores);                          // kazanan ve herkesin ceza puanı
+
+const oyun = new OkeyMatch({ settings: { variant: '101' } });      // 11 tur, en az ceza kazanır
+```
+
+`newHand(...)` ayara göre doğru tur sınıfını verir (`OkeyHand` ya da `Okey101Hand`); kayıtlı bir turu `loadHand(json)` ya da bütün oyunu `OkeyMatch.fromJSON` yükler. Bir tur 101'de birden çok hamleden oluşur: çek, istenirse aç ve işle, sonra taş at.
+
+| Hamle (`el.act(koltuk, hamle)`) | Gönderiliş biçimi |
+| --- | --- |
+| Çekme | `{ type: 'draw', value: 'deck' }` ya da `{ type: 'draw', value: 'discard' }` |
+| Elini açma (perler ve seriler) | `{ type: 'open', groups: [[…taşlar…], …] }`. Seri alttan üste sıralı yazılır; per sırasız. Joker belirsizse grup `{ type: 'run' \| 'set', tiles: […] }` olarak da verilebilir |
+| Elini açma (çiftler) | `{ type: 'open', pairs: [[a, b], …] }` |
+| İşleme | `{ type: 'process', tile, group, position: 'start' \| 'end' }` (serinin başına/sonuna ya da pere), joker yerine koymak için `{ type: 'process', tile, group, replace: jokerinTaşı }` |
+| Taş atma | `{ type: 'discard', value: 'Y5a' }` (elde tek taş kalmışsa son taşı atmak turu bitirir) |
+
+Hata kodları klasikteki gibidir (`badAction`, `stale`, `gameOver`, `notYourTurn`, `wrongPhase`, `illegal`). Hamlenin geçerliliğini motor denetler; arayüz yalnızca hamleyi gönderir. Eşli ya da klasik bir turun `finish` hamlesi 101'de yoktur.
+
+Arayüz için hazır hesaplar:
+
+| Bilgi | Nerede bulunur |
+| --- | --- |
+| Elin açılıp açılamayacağı, en iyi açılış (en yüksek puanlı ayrık gruplar), kalan taşlar | `el.openInfo(koltuk)` → `{ canOpen, mode: 'groups' \| 'pairs', total, groups: [{ type, tiles, value }], pairs, leftover }`. `groups` olduğu gibi `open` hamlesine verilir |
+| Şu an yapılabilecek bütün işlemeler | `el.processOptions(koltuk)` → `[{ tile, group, position \| replace }]` (doğrudan `process` hamlesine verilir) |
+| Çekilebilecek yerler (atığı almak açamayan oyuncuya sunulmaz) | `el.drawOptions()` |
+| Masadaki açık gruplar (herkesin açtıkları, herkese görünür) | `el.table` → `[{ id, owner, type, tiles: [{ id, color, number, pos, joker }], value }]` |
+| Kim elini açtı | `el.opened` → koltuk başına `null`, `'groups'` ya da `'pairs'` |
+| Her gruba ve tek tek taşa puan | `checkGroup(taşlar, okey, ayarlar)` → `{ type, tiles, value }` ya da `null` |
+| Tek bir elin en iyi açılışı (turdan bağımsız) | `bestOpening(taşlar, okey, ayarlar)` |
+
+`el.view(koltuk)` 101'de klasik bilgilere ek olarak `opened`, `table` (herkesin açtığı gruplar, herkese görünür), sırası gelen oyuncu için `openInfo` ve `processOptions`, atığı alıp açması gereken oyuncu için `taken` verir. Rakiplerin elleri ve destenin içi yine görünümde yer almaz; yalnızca herkesin gördüğü hamleler (atıktan alınan taş, masadan alınan joker) bilinir.
+
+101 okeyde bilgisayar (kolay, normal, zor) açabilirse açar, işleyebilirse işler (önce joker yerine gerçek taş koymayı dener). 101'de zor seviye, bir sonraki oyuncunun masaya işleyebileceği taşları atmaktan kaçınır.
+
+**101'de süre (bir işlemci çekirdeğinde ölçüldü):** hamle başına ortalama yaklaşık 4 ms (kolay 3 ms, normal ve zor 4 ms), en kötü durumda yaklaşık 120 ms; bir tur ortalama 55 hamledir. 101'de zor seviyenin klasikteki gibi bir adım ileriye bakan hesabı yoktur (süreyi uzatmamak için). **Güç ölçümü:** normal, 3 kolaya karşı turlarda kolaydan çok daha az ceza aldı (ortalama 44 ceza puanına karşı 60). Zor ile normal arasında 101'de ölçülebilir bir fark yok: 400 turda zor ortalama 38,5, normal 41,2 ceza aldı (az ceza daha iyi); bu fark rastlantı sınırları içinde.
+
 ## Kaydetme ve yükleme
 
 Oyun istenen her an kaydedilip daha sonra kaldığı yerden sürdürülebilir. Örneğin eklentinin penceresi kapanıp yeniden açıldığında oyun kaybolmaz:
@@ -180,7 +224,7 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 
 | Ayar | Varsayılan | Anlamı |
 | --- | --- | --- |
-| `variant` | `'klasik'` | Oyun türü: `'klasik'` ya da `'esli'` (`'101'` henüz oynanamaz) |
+| `variant` | `'klasik'` | Oyun türü: `'klasik'`, `'esli'` ya da `'101'` |
 | `aceHigh` | açık | 13'ten sonra 1 gelebilir (12-13-1 serisi) |
 | `allowPairs` | açık | Yedi çiftle bitmek (çift gitme) serbest |
 | `startScore` | 20 | Oyuna başlangıç puanı |
@@ -191,7 +235,16 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 | `winnerTakes` | kapalı | Bitiren, kaybedilen puanların toplamını kazanır |
 | `endScore` | 0 | Biri bu puana ya da altına inince oyun biter (klasik) |
 | `teamEndScore` | 0 | Bir takımın toplamı bu puana ya da altına inince oyun biter (eşli) |
-| `maxRounds` | 0 | En çok kaç tur oynanacağı (0 = sınır yok) |
+| `maxRounds` | 0 (101'de 11) | En çok kaç tur oynanacağı (0 = sınır yok) |
+| `openMin` | 101 | 101 okey: elini açmak için grupların en az toplam puanı |
+| `pairOpenMin` | 5 | 101 okey: çiftle açmak için çift sayısı (0 = çiftle açılamaz) |
+| `mustOpenWithTaken` | açık | 101 okey: atığı alan, açmamışsa o taşla açmak zorunda |
+| `notOpenedPenalty` | 101 | 101 okey: elini açmamış oyuncunun cezası |
+| `okeyHandPenalty` | 101 | 101 okey: açmış oyuncunun elinde kalan okeyin cezası |
+| `aceValue` | 1 | 101 okey: 1 taşının puanı (düşük seri, per, el) |
+| `aceHighValue` | 14 | 101 okey: 12-13-1 serisindeki 1'in puanı |
+| `deckOutScores` | açık | 101 okey: deste bitince herkes elindekinin cezasını alır |
+| `matchEndScore` | 0 (kapalı) | 101 okey: bu cezaya ulaşan olursa oyun biter |
 
 ## Bilgisayar oyuncusu
 

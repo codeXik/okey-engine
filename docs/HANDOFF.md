@@ -1,5 +1,12 @@
 # HANDOFF — devam kaydı
 
+## 28 Ekim 2026 — 101 okey (1.3.0)
+
+- `variant: '101'` oynanabilir. Yeni dosyalar: `src/meld.js` (grup denetimi `checkGroup`, en iyi açılış `bestGroups`/`bestPairs`), `src/hand101.js` (`Okey101Hand`, `newHand`, `loadHand`, `bestOpening`), 101 puanlaması `scoring.js` içinde `scoreRound101`, bilgisayar `bot.js` sonunda (`botAction101`). `OkeyHand` 101'i kendisi oynamaz (`Okey101Hand` kullanılır); `OkeyMatch` türe göre doğru sınıfı seçer.
+- Kural varsayımları (resmî kural kitabı yok, bkz. `docs/KURALLAR.md`): açma 101 puan ya da 5 çift, atığı alan o taşla açar, çiftle açan yalnız çift açar, açmayan 101 ceza, elde kalan okey 101, 1 taşı 1 (12-13-1 sonunda 14), 11 tur, en az ceza kazanır, deste bitince herkes elindekinin cezasını alır.
+- Ölçüm: 101'de bilgisayar hamle başına ortalama ~4 ms, en kötü ~120 ms. Normal, kolayı açıkça yeniyor; zor ile normal arasında 101'de ölçülebilir fark yok (400 turda ceza 38,5 ve 41,2). Not: karşılaştırma yaparken oyuncuyu dağıtıcıya göre sabit koltuğa koymayın, koltuk sırası sonucu çarpıtıyor.
+- Henüz yok: eşli 101, çevrim içi süre kuralları, 101'de bitirene eksi puan.
+
 ## 28 Ekim 2026 — Eşli okey (1.2.0)
 
 - `variant: 'esli'` oynanabilir (`VARIANTS.esli.playable = true`). Yeni: `src/teams.js`; takım puanı `OkeyMatch.teamScores/teams/winnerTeam/winners`; `view` içinde `team/partner/teams`; puanlama `scoring.js` içinde (bitiren takım kaybetmez, rakip iki oyuncu kaybeder). Yeni ayar `teamEndScore`.

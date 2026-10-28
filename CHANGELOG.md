@@ -1,5 +1,13 @@
 # Değişiklik kaydı
 
+## 1.3.0 — 28 Ekim 2026
+
+- Yeni oyun türü **101 okey** (4 kişi, tek tek): ayar `variant: '101'`. 22/21 taşlık dağıtım (deste 20), elini açmak için en az 101 puanlık per ve seri (ya da en az 5 çift), açtıktan sonra masadaki herkesin gruplarına taş işleme ve joker yerine gerçek taşı koyup jokeri alma, atığı alınca açma zorunluluğu, ceza puanı (açmayan 101, açan ise elinde kalan taşlar; okey ve çift çarpanları), 11 turluk ya da puanla biten oyun. Eşli 101 yok.
+- Yeni: `Okey101Hand`, `newHand` / `loadHand` (ayara göre doğru tur sınıfı), hamleler `open`, `process` (ve `draw`, `discard`), `openInfo`, `processOptions`, `bestOpening`, `checkGroup`, `bestGroups`; `view` içinde `opened`, `table`, `openInfo`, `processOptions`.
+- Yeni ayarlar: `openMin`, `pairOpenMin`, `mustOpenWithTaken`, `notOpenedPenalty`, `okeyHandPenalty`, `aceValue`, `aceHighValue`, `deckOutScores`, `matchEndScore`. 101'de `maxRounds` varsayılanı 11.
+- Bilgisayar (kolay, normal, zor) 101 oynar: açabiliyorsa açar, işleyebiliyorsa işler.
+- Klasik ve eşli oyun etkilenmez.
+
 ## 1.2.0 — 28 Ekim 2026
 
 - Yeni oyun türü **Eşli okey (2'ye 2)**: ayar `variant: 'esli'`. Koltuk 0+2 bir takım, 1+3 öteki takım; eş karşıda oturur. Oynanış klasik okeyle aynıdır (çekme, atma, bitirme, çift gitme; soldaki oyuncunun atığını alma kuralı değişmedi).

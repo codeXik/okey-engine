@@ -1,5 +1,6 @@
 import { COLORS, meaning } from './tiles.js';
 import { countPairs } from './groups.js';
+import { numberPoints } from './meld.js';
 
 // The computer player. It looks at a hand the way a person does: which tiles already sit in runs and sets,
 // which are one tile short of one, and which are lonely. Levels:
@@ -278,6 +279,7 @@ export function botDraw(h, seat = h.turn, { level = 'normal', rng = Math.random 
 // The action the seat on turn would take, without taking it: { type, value, seq, mode? } for OkeyHand.act,
 // or null when the round is over. Lets a Web Worker or a server think and apply the move elsewhere.
 export function botAction(h, { level = 'normal', rng = Math.random } = {}) {
+  if (h.is101) return botAction101(h, level, rng);
   const seat = h.turn;
   const type = h.expects(seat);
   if (type === 'draw') return { type, value: botDraw(h, seat, { level, rng }), seq: h.seq };
@@ -297,4 +299,96 @@ export function botStep(h, { level = 'normal', rng = Math.random } = {}) {
   const r = h.act(h.turn, action);
   if (!r.ok) throw new Error(`Computer move refused: ${r.error}`);
   return true;
+}
+
+// ---- 101 okey ---------------------------------------------------------------------------------------
+// One call gives the next single action of the turn: draw, then (as long as there is something to do) open, process,
+// lay more groups, finally discard. 'kolay' sometimes skips optional steps and throws carelessly; 'normal' keeps the
+// best arrangement and throws its second choice now and then; 'zor' also avoids throwing tiles the next player could
+// add to the groups on the table.
+
+const tilePoints = (t, okey, s) => {
+  const m = meaning(t, okey);
+  return m ? numberPoints(m.number, s) : s.okeyHandPenalty;
+};
+
+// Could `tile` be added to group `g` of the table (ignoring who holds it)?
+function fitsGroup(tile, g, okey, aceHigh) {
+  if (g.type === 'pair') return false;
+  const m = meaning(tile, okey);
+  if (!m) return true;
+  if (g.type === 'set') return g.tiles.length < 4 && m.number === g.tiles[0].number && !g.tiles.some((t) => !t.joker && t.color === m.color);
+  if (m.color !== g.tiles[0].color || g.tiles.length >= 13) return false;
+  const lo = g.tiles[0].pos - 1;
+  const hi = g.tiles.at(-1).pos + 1;
+  const top = aceHigh ? 14 : 13;
+  return (lo >= 1 && m.number === lo) || (hi <= top && m.number === (hi === 14 ? 1 : hi));
+}
+
+function botAction101(h, level, rng) {
+  const seat = h.turn;
+  const type = h.expects(seat);
+  if (type === 'draw') {
+    const options = h.drawOptions(seat);
+    if (options.length === 1) return { type, value: options[0], seq: h.seq };
+    const top = h.discards[h.previous(seat)].at(-1);
+    let take;
+    if (level === 'kolay') take = rng() < 0.3;
+    else if (!h.opened[seat]) take = true; // the engine only offers it when the hand can open with it
+    else {
+      const useful = h.table.some((g) => fitsGroup(top, g, h.okey, h.settings.aceHigh)) && h.opened[seat] === 'groups';
+      const value = makeEvaluator(h.settings.aceHigh, constantOuts);
+      const hand = h.hands[seat];
+      const mixed = hand.concat(top);
+      take = useful || Math.max(...[...new Set(mixed)].map((t) => value(without(mixed, t), h.okey))) - value(hand, h.okey) >= 3;
+    }
+    return { type, value: take ? 'discard' : 'deck', seq: h.seq };
+  }
+  if (type !== 'discard') return null;
+  const hand = h.hands[seat];
+  const skip = level === 'kolay' && rng() < 0.3; // a careless player leaves optional steps out
+  if (!h.opened[seat]) {
+    const info = h.openInfo(seat, h.taken ?? undefined);
+    if (info.canOpen) {
+      return info.mode === 'pairs'
+        ? { type: 'open', pairs: info.pairs, seq: h.seq }
+        : { type: 'open', groups: info.groups.map((g) => ({ type: g.type, tiles: g.tiles })), seq: h.seq };
+    }
+  } else if (!skip) {
+    if (h.opened[seat] === 'groups') {
+      const moves = h.processOptions(seat);
+      if (moves.length) {
+        // putting a real tile in a joker's place first, then the tiles worth the most points
+        const score = (m) => (m.replace ? 100 : 0) + tilePoints(m.tile, h.okey, h.settings);
+        const best = moves.reduce((a, b) => (score(b) > score(a) ? b : a));
+        return { type: 'process', ...best, seq: h.seq };
+      }
+    }
+    const info = h.openInfo(seat);
+    if (info.canOpen && (info.mode === 'pairs' ? info.pairs.length : info.groups.length)) {
+      return info.mode === 'pairs'
+        ? { type: 'open', pairs: info.pairs, seq: h.seq }
+        : { type: 'open', groups: info.groups.map((g) => ({ type: g.type, tiles: g.tiles })), seq: h.seq };
+    }
+  }
+  return { type: 'discard', value: botDiscard101(h, seat, level, rng), seq: h.seq };
+}
+
+function botDiscard101(h, seat, level, rng) {
+  const hand = h.hands[seat];
+  const tiles = [...new Set(hand)];
+  if (tiles.length === 1) return tiles[0];
+  if (level === 'kolay' && rng() < 0.25) return tiles[Math.floor(rng() * tiles.length)];
+  const value = makeEvaluator(h.settings.aceHigh, constantOuts);
+  const next = (seat + 1) % 4;
+  const ranked = tiles.map((t) => {
+    const rest = without(hand, t);
+    let score = h.opened[seat] === 'pairs' ? countPairs(rest, h.okey) * 10 : value(rest, h.okey);
+    score += (level === 'zor' ? 0 : 0.4) * tilePoints(t, h.okey, h.settings); // a high tile left in the hand costs penalty points
+    if (level === 'zor' && h.opened[next] === 'groups' && h.table.some((g) => fitsGroup(t, g, h.okey, h.settings.aceHigh))) score -= 6;
+    if (level === 'kolay') score += (rng() - 0.5) * 12;
+    return { t, score };
+  }).sort((a, b) => b.score - a.score);
+  if (level === 'normal' && ranked.length > 1 && rng() < 0.22) return ranked[1].t;
+  return ranked[0].t;
 }

@@ -8,9 +8,9 @@ Kaynaklar: Türkiye'de masalarda ve çevrim içi salonlarda en yaygın oynanan k
 | --- | --- | --- |
 | Klasik okey (4 kişi, herkes kendi başına) | `klasik` | **Sürüm 1: hazır** |
 | Eşli okey (2'ye 2; 0+2 ile 1+3 eş) | `esli` | **Sürüm 2: hazır** |
-| 101 okey | `101` | Sürüm 3: yapılmadı, yalnızca genişleme noktası var |
+| 101 okey (4 kişi, tek tek) | `101` | **Sürüm 3: hazır** (eşli 101 yok) |
 
-Hazır olmayan bir tür (`101`) seçilirse motor hata verir (`Variant not playable yet`). Üç türün ortak parçaları (taşlar, per/seri denetimi, çözücü, kayıt, bilgisayarın el değerlendirmesi) ayrı modüllerdedir; yeni tür bunların üstüne kural ekler.
+Hazır olmayan bir tür seçilirse motor hata verir (`Variant not playable yet`); şu an üç türün üçü de oynanabilir. Üç türün ortak parçaları (taşlar, per/seri denetimi, çözücü, kayıt, bilgisayarın el değerlendirmesi) ayrı modüllerdedir; yeni tür bunların üstüne kural ekler.
 
 ## Taşlar ve dağıtım
 
@@ -80,11 +80,56 @@ Her oyuncu maça `startScore` (varsayılan **20**) puanla başlar. Bir tur biter
 - **Gizlilik:** Hiçbir oyuncu eşinin elini de görmez; `view(koltuk)` yalnızca oyuncunun kendi taşlarını verir. Tur bittiğinde bütün eller açılır, klasikteki gibi.
 - **Bilgisayar:** Üç seviye de eşli oynar. Zor seviye, başkalarının atıktan alıp elinde tuttuğu taşları ortada olmayan taşlar sayar. Başka bir eş işbirliği yoktur, çünkü kurallara göre eşe taş verilemez.
 
+## 101 okey
+
+`variant: '101'` ile oynanır. 4 kişi, herkes kendi başına. **101 okeyin resmî bir kural kitabı yoktur**; kurallar masadan masaya ve oyun sitesinden siteye değişir. Aşağıdakiler Türkiye'de en yaygın oynanışa göre seçilmiş varsayılanlardır; ayrılan her ayrıntı ayardır.
+
+Taşlar, gösterge, okey, sahte okey, per ve seri tanımı klasik okeyle aynıdır (yukarıya bakın). Farklar:
+
+- **Dağıtım:** Başlayan oyuncu (dağıtıcıdan sonraki koltuk) **22**, ötekiler **21** taş alır. Deste 20 taştır.
+- **Sıra:** Klasikteki gibi: desteden ya da soldaki oyuncunun attığı taştan çek, bir taş at. Başlayan çekmeden başlar.
+- **Elini açmak:** Bir oyuncu, çektikten sonra ve taş atmadan önce, elindeki **perleri ve serileri masaya açabilir** (`open`). Açılan grupların puan toplamı en az `openMin` (varsayılan **101**) olmalıdır. Yani 101, yeterli puanı olan eli açmanın şartıdır; bir kere açan oyuncu sonraki turlarda ve aynı turda istediği kadar geçerli grup açabilir (puan şartı aranmaz).
+- **Grupların puanı:** Taşın üzerindeki sayı kadar. Joker (okey) yerine geçtiği taşın puanını taşır; sahte okey okey taşının puanını taşır. **1** taşı: düşük seride (1-2-3), perde ve elde kalınca `aceValue` (varsayılan **1**) puan; 12-13-1 serisinin sonundaki 1 `aceHighValue` (varsayılan **14**) puandır. (1'in kaç puan sayıldığı masadan masaya en çok değişen ayrıntıdır.)
+- **Seriler:** Aynı renkten ardışık en az 3, en çok 13 taş; 12-13-1 serisi serbest (`aceHigh`), 13-1-2 olmaz. **Perler:** aynı sayıdan farklı renkli 3 ya da 4 taş.
+- **Çiftle açmak:** Elinde en az `pairOpenMin` (varsayılan **5**) çift olan, bunları açabilir (`pairOpenMin: 0` ile kapatılır). Çiftle açan oyuncu **yalnızca** başka çiftler açabilir; gruplara taş işleyemez ve herkesin işleyemeyeceği çiftleri masaya bırakır. Çiftle açılmış bir elin bitirilmesi cezaları `pairMultiplier` ile katlar.
+- **Atılan taşı alınca açmak zorunluluğu:** Elini henüz açmamış bir oyuncu soldakinin attığı taşı alırsa, **o turda o taşla birlikte elini açmak zorundadır** (`mustOpenWithTaken`, varsayılan açık). Motor, eli o taşla açamayan oyuncuya atığı almayı hiç sunmaz (`drawOptions`). Elini daha önce açmış oyuncu için böyle bir zorunluluk yoktur.
+- **İşlemek:** Elini perlerle/serilerle açmış oyuncu, kendi turunda masadaki **herkesin** açtığı gruplara taş **işleyebilir** (`process`): bir serinin başına ya da sonuna uygun taş, 4 taşlı olmayan bir pere eksik renkten taş. Masadaki bir **joker yerine, onun temsil ettiği gerçek taşı koyup jokeri alabilir** (`replace`); alınan joker elde kalır ve hemen başka bir yere işlenebilir ya da yeni grup için kullanılabilir (aynı turda işlemek zorunlu değildir). Seriye joker de işlenebilir. Çiftle açan ya da henüz açmamış oyuncu işleyemez; çiftlere kimse taş işleyemez.
+- **Bitirmek:** Eli boşalan oyuncu turu bitirir: ya **son taşı atarak** (elini açmış olması şarttır) ya da bütün taşlarını masaya açıp/işleyerek (elinde taş kalmaz). Son atılan taş okey ise `okeyFinishMultiplier` (varsayılan **×2**) katlar.
+- **Deste bitince:** 20 taşlık deste biterse (son taş atıldıktan sonra) tur biter; `deckOutScores` açıkken (varsayılan) herkes elinde kalan taşın cezasını alır, çarpan yoktur.
+
+### Ceza puanı (en az puan kazanır)
+
+101 okeyde puan **ceza puanıdır**; herkes 0'dan başlar, en az ceza alan kazanır. Tur biterken bitiren **0 ceza** alır; ötekiler:
+
+- **Elini hiç açmamış oyuncu:** `notOpenedPenalty` (varsayılan **101**).
+- **Elini açmış ama bitiremeyen oyuncu:** elinde kalan taşların puanı toplamı; elinde kalan **okey** `okeyHandPenalty` (varsayılan **101**), sahte okey okeyin taşının puanı.
+- Son taşı okey atarak bitirme cezaları **×2**, çiftle açıp bitirme **×2** yapar (ikisi birden ×4); çarpanlar çarpılır.
+
+**Maçın bitişi:** `maxRounds` tur (101 okeyde varsayılan **11**) oynanır ya da `matchEndScore` (varsayılan kapalı) ceza puanına ulaşan olursa maç biter; en az ceza puanı toplamı olan kazanır. En düşük toplamda eşitlik varsa bir tur daha oynanır. Her tur dağıtıcı bir sonraki koltuğa geçer.
+
+### Belirsiz ya da değişen ayrıntılar (hepsi ayar)
+
+| Ayar | Varsayılan | Anlamı |
+| --- | --- | --- |
+| `openMin` | 101 | Açmak için grupların en az toplam puanı |
+| `pairOpenMin` | 5 | Çiftle açmak için çift sayısı (0 = çiftle açılamaz) |
+| `mustOpenWithTaken` | açık | Atığı alan, açmamışsa o taşla açmak zorunda |
+| `notOpenedPenalty` | 101 | Açmamış oyuncunun cezası |
+| `okeyHandPenalty` | 101 | Açmış oyuncunun elinde kalan okey cezası |
+| `aceValue` | 1 | 1 taşının düşük seri / per / el puanı |
+| `aceHighValue` | 14 | 12-13-1 serisindeki 1'in puanı |
+| `deckOutScores` | açık | Deste bitince herkes elindekinin cezasını alır |
+| `matchEndScore` | 0 (kapalı) | Bu cezaya ulaşan olursa maç biter |
+| `maxRounds` | 11 (101'de) | Maçın tur sayısı |
+| `okeyFinishMultiplier`, `pairMultiplier`, `aceHigh`, `allowPairs` | klasikteki gibi | Çarpanlar ve seri kuralı |
+
+Eşli 101 yapılmadı; yalnız genişleme noktası vardır (`teams` bilgisi ve puanlamanın ayrı işlev olması).
+
 ## Ayarlar
 
 | Ayar | Varsayılan | Anlamı |
 | --- | --- | --- |
-| `variant` | `'klasik'` | Oyun türü: `klasik` ya da `esli` (`101` henüz oynanamaz) |
+| `variant` | `'klasik'` | Oyun türü: `klasik`, `esli` ya da `101` |
 | `aceHigh` | açık | 13'ten sonra 1 gelebilir (12-13-1) |
 | `allowPairs` | açık | Çift gitmek serbest |
 | `startScore` | 20 | Maça başlangıç puanı |
@@ -103,5 +148,5 @@ Masadan masaya değişen ve varsayılan oyunda **uygulanmayan** kurallar; isteni
 
 - Atılan okeyin alınmasının yasaklanması, aldığı taşı hemen geri atma yasağı.
 - Bitmeyen elde kalan taşlar için ek ceza (elde okey kalan oyuncuya fazladan puan vb.).
-- Gösterge ve okey taşıyla ek bonuslar, "açma" (101'e özgü) bunlar sürüm 3'tedir.
+- Gösterge ve okey taşıyla ek bonuslar, eşli 101, 101'de bitirene eksi puan (bonus) ve çevrim içi süre kuralları.
 - Zaman sınırı ve bağlantısı kopan oyuncunun yerine hamle: sunucu `botAction` ile bunu yapar (README'de anlatılır).

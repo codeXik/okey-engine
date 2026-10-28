@@ -1,6 +1,6 @@
 {
   "name": "okey-engine",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Türk Okeyi için bağımlılıksız kural motoru ve bilgisayar oyuncusu / Dependency-free Turkish Okey rules engine and computer player",
   "license": "MIT",
   "author": "Skynon Labs Ltd.",

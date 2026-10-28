@@ -19,7 +19,10 @@ export class OkeyHand {
     assertPlayable(this.settings);
     this.dealer = dealer;
     this.starter = (dealer + 1) % 4;
-    const d = deal || dealRound(rng, this.starter);
+    this.is101 = this.settings.variant === '101';
+    if (this.is101 && new.target === OkeyHand) throw new Error('Use Okey101Hand for 101 okey');
+    this.sizes = this.is101 ? { first: 22, others: 21, deck: 20 } : { first: 15, others: 14, deck: 48 };
+    const d = deal || dealRound(rng, this.starter, this.sizes);
     this.hands = d.hands.map((h) => h.slice());
     this.deck = d.deck.slice();
     this.indicator = d.indicator;
@@ -33,7 +36,7 @@ export class OkeyHand {
     this.lastAction = null;
     if (!deal) return;
     checkTiles([...this.hands.flat(), ...this.deck, this.indicator]);
-    if (this.hands.some((h, s) => h.length !== (s === this.starter ? 15 : 14)) || this.deck.length !== 48) throw new Error('Wrong number of tiles');
+    if (this.hands.some((h, s) => h.length !== (s === this.starter ? this.sizes.first : this.sizes.others)) || this.deck.length !== this.sizes.deck) throw new Error('Wrong number of tiles');
   }
 
   get over() {
@@ -137,7 +140,7 @@ export class OkeyHand {
     return out;
   }
 
-  #done(seat, type, value, tile) {
+  _done(seat, type, value, tile) {
     this.seq++;
     const entry = { seq: this.seq, seat, type, value };
     if (tile !== undefined) entry.tile = tile;
@@ -145,7 +148,7 @@ export class OkeyHand {
     this.log.push({ ...entry });
   }
 
-  #check(seat, phase) {
+  _check(seat, phase) {
     if (this.over) throw new Error('The round is over');
     if (seat !== this.turn) throw new Error('Not your turn');
     if (this.phase !== phase) throw new Error(`Not the ${phase} phase`);
@@ -153,22 +156,22 @@ export class OkeyHand {
 
   // Takes a tile from the 'deck' or from the previous seat's 'discard'. Returns { tile }.
   draw(seat, source) {
-    this.#check(seat, 'draw');
+    this._check(seat, 'draw');
     if (!this.drawOptions(seat).includes(source)) throw new Error(`Cannot draw from ${source}`);
     const tile = source === 'deck' ? this.deck.pop() : this.discards[this.previous(seat)].pop();
     this.hands[seat].push(tile);
     this.phase = 'discard';
-    this.#done(seat, 'draw', source, source === 'discard' ? tile : undefined);
+    this._done(seat, 'draw', source, source === 'discard' ? tile : undefined);
     return { tile };
   }
 
   discard(seat, tile) {
-    this.#check(seat, 'discard');
+    this._check(seat, 'discard');
     const at = this.hands[seat].indexOf(tile);
     if (at < 0) throw new Error('You do not hold that tile');
     this.hands[seat].splice(at, 1);
     this.discards[seat].push(tile);
-    this.#done(seat, 'discard', tile, tile);
+    this._done(seat, 'discard', tile, tile);
     this.turn = (seat + 1) % 4;
     this.phase = 'draw';
     if (this.deck.length === 0) {
@@ -181,14 +184,14 @@ export class OkeyHand {
   // Goes out by throwing `tile` face down as the last tile; the other 14 must form runs and sets ('per')
   // or seven pairs ('cift'). Without `mode` the better paying one is used. Returns the result.
   finish(seat, tile, mode) {
-    this.#check(seat, 'discard');
+    this._check(seat, 'discard');
     const options = this.finishOptions(seat).filter((o) => o.tile === tile && (mode === undefined || o.mode === mode));
     if (!options.length) throw new Error('Cannot go out like that');
     const best = options.reduce((a, b) => (b.points > a.points ? b : a));
     const rest = this.hands[seat].filter((t) => t !== tile);
     const arrangement = winningArrangement(rest, this.okey, this.settings, [best.mode]);
     const { okeyFinish, pair, fromHand } = best;
-    this.#done(seat, 'finish', tile, tile);
+    this._done(seat, 'finish', tile, tile);
     this.hands[seat] = rest;
     this.phase = 'done';
     const base = { reason: 'finish', winner: seat, tile, mode: best.mode, okeyFinish, pair, fromHand };
