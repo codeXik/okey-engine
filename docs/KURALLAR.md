@@ -7,10 +7,10 @@ Kaynaklar: Türkiye'de masalarda ve çevrim içi salonlarda en yaygın oynanan k
 | Tür | Ayar (`variant`) | Durum |
 | --- | --- | --- |
 | Klasik okey (4 kişi, herkes kendi başına) | `klasik` | **Sürüm 1: hazır** |
-| Eşli okey (2'ye 2; 0+2 ile 1+3 eş) | `esli` | Sürüm 2: yapılmadı, yalnızca genişleme noktası var |
+| Eşli okey (2'ye 2; 0+2 ile 1+3 eş) | `esli` | **Sürüm 2: hazır** |
 | 101 okey | `101` | Sürüm 3: yapılmadı, yalnızca genişleme noktası var |
 
-Hazır olmayan bir tür seçilirse motor hata verir (`Variant not playable yet`). Üç türün ortak parçaları (taşlar, per/seri denetimi, çözücü, kayıt, bilgisayarın el değerlendirmesi) ayrı modüllerdedir; yeni tür bunların üstüne kural ekler.
+Hazır olmayan bir tür (`101`) seçilirse motor hata verir (`Variant not playable yet`). Üç türün ortak parçaları (taşlar, per/seri denetimi, çözücü, kayıt, bilgisayarın el değerlendirmesi) ayrı modüllerdedir; yeni tür bunların üstüne kural ekler.
 
 ## Taşlar ve dağıtım
 
@@ -68,11 +68,23 @@ Her oyuncu maça `startScore` (varsayılan **20**) puanla başlar. Bir tur biter
 
 **Maçın bitişi:** biri `endScore` (varsayılan **0**) puana ya da altına inince maç biter; en yüksek puanlı kazanır. En yüksek puanda eşitlik varsa bir tur daha oynanır. `maxRounds` sıfırdan büyükse o kadar turdan sonra maç biter (varsayılan sınırsız). Her tur dağıtıcı bir sonraki koltuğa geçer.
 
+## Eşli okey (2'ye 2)
+
+`variant: 'esli'` ile oynanır. Oynanış (dağıtım, çekme, atma, per ve seri, çift gitme, bitirme) **klasik okeyle birebir aynıdır**; yalnızca takımlar ve puanlama farklıdır.
+
+- **Takımlar:** 0 ve 2 numaralı koltuklar bir takım (takım 0), 1 ve 3 numaralılar öteki takım (takım 1). Eş karşıda oturur. Sıra yine koltuk numarası arttıkça ilerler; masada sırayla bir takım, bir rakip oynar.
+- **Atıktan çekme:** Klasikteki gibi, her oyuncu yalnızca kendinden önceki koltuğun attığı taşı alabilir. Bu koltuk her zaman bir rakiptir; yani eşin attığı taşı rakip alabilir, eşe taşı doğrudan vermenin yolu yoktur.
+- **Kazanan:** Bitiren oyuncunun takımı turu kazanır.
+- **Puanlama:** Bitiren oyuncu **ve eşi** puan kaybetmez; rakip takımın **iki oyuncusu da** `lossNormal` × çarpanlar kadar puan kaybeder (normal bitişte her biri −2, takım olarak −4; okeyle çift: her biri −8). Çarpanlar klasikteki gibidir. `winnerTakes` açılırsa bitiren takımın iki oyuncusu da kaybedilen kadar puan kazanır. Deste bitip tur berabere kalırsa kimse puan kaybetmez.
+- **Takım puanı:** Takımın puanı, iki oyuncusunun puanının toplamıdır (herkes `startScore` ile başlar, yani takım 40 puanla başlar). Bir takımın toplamı `teamEndScore` (varsayılan **0**) puana ya da altına inince maç biter; toplamı yüksek olan takım kazanır. Toplamlar eşitse bir tur daha oynanır. `maxRounds` de geçerlidir; `endScore` eşlide kullanılmaz.
+- **Gizlilik:** Hiçbir oyuncu eşinin elini de görmez; `view(koltuk)` yalnızca oyuncunun kendi taşlarını verir. Tur bittiğinde bütün eller açılır, klasikteki gibi.
+- **Bilgisayar:** Üç seviye de eşli oynar. Zor seviye, başkalarının atıktan alıp elinde tuttuğu taşları ortada olmayan taşlar sayar. Başka bir eş işbirliği yoktur, çünkü kurallara göre eşe taş verilemez.
+
 ## Ayarlar
 
 | Ayar | Varsayılan | Anlamı |
 | --- | --- | --- |
-| `variant` | `'klasik'` | Oyun türü (`esli` ve `101` henüz oynanamaz) |
+| `variant` | `'klasik'` | Oyun türü: `klasik` ya da `esli` (`101` henüz oynanamaz) |
 | `aceHigh` | açık | 13'ten sonra 1 gelebilir (12-13-1) |
 | `allowPairs` | açık | Çift gitmek serbest |
 | `startScore` | 20 | Maça başlangıç puanı |
@@ -81,7 +93,8 @@ Her oyuncu maça `startScore` (varsayılan **20**) puanla başlar. Bir tur biter
 | `pairMultiplier` | 2 | Çift ile bitirme çarpanı |
 | `handMultiplier` | 2 | Elden bitirme çarpanı |
 | `winnerTakes` | kapalı | Bitiren kaybedilen puanları kazanır |
-| `endScore` | 0 | Bu puana inen olursa maç biter |
+| `endScore` | 0 | Bu puana inen olursa maç biter (klasik) |
+| `teamEndScore` | 0 | Bir takımın toplamı bu puana inerse maç biter (eşli) |
 | `maxRounds` | 0 | Tur sınırı (0 = yok) |
 
 ## Bilinçli olarak motorda olmayanlar
@@ -90,5 +103,5 @@ Masadan masaya değişen ve varsayılan oyunda **uygulanmayan** kurallar; isteni
 
 - Atılan okeyin alınmasının yasaklanması, aldığı taşı hemen geri atma yasağı.
 - Bitmeyen elde kalan taşlar için ek ceza (elde okey kalan oyuncuya fazladan puan vb.).
-- Gösterge ve okey taşıyla ek bonuslar, "açma" (101'e özgü) ve eşli türün puanlaması: bunlar sürüm 2 ve 3'tedir.
+- Gösterge ve okey taşıyla ek bonuslar, "açma" (101'e özgü) bunlar sürüm 3'tedir.
 - Zaman sınırı ve bağlantısı kopan oyuncunun yerine hamle: sunucu `botAction` ile bunu yapar (README'de anlatılır).

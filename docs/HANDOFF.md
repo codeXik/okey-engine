@@ -1,5 +1,11 @@
 # HANDOFF — devam kaydı
 
+## 28 Ekim 2026 — Eşli okey (1.2.0)
+
+- `variant: 'esli'` oynanabilir (`VARIANTS.esli.playable = true`). Yeni: `src/teams.js`; takım puanı `OkeyMatch.teamScores/teams/winnerTeam/winners`; `view` içinde `team/partner/teams`; puanlama `scoring.js` içinde (bitiren takım kaybetmez, rakip iki oyuncu kaybeder). Yeni ayar `teamEndScore`.
+- Eş işbirliği bilerek basit: kurallara göre eşe taş verilemez (atığını rakip alır), bu yüzden bilgisayarın eşliye özel tek davranışı, başkalarının atıktan alıp tuttuğu taşları ortada olmayan saymasıdır.
+- Sıradaki: 101 okey (sürüm 3).
+
 ## 28 Ekim 2026 — Depo açıldı (1.0.0)
 
 - Kullanıcı kararı: okey98 için kendi motorumuz yazılır (hazır motorlar Kotlin / lisanssız / GPL olduğu için elendi), batak-engine gibi ayrı depoda yayımlanır. Ad `okey-engine`, MIT, herkese açık.

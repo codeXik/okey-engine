@@ -1,12 +1,16 @@
 import { OkeyHand } from './hand.js';
 import { defaultRandom } from './tiles.js';
 import { withDefaults, assertPlayable } from './settings.js';
+import { TEAM_SEATS, teamOf } from './teams.js';
 
 const SAVE_VERSION = 1;
 
 // A whole game: every player starts with settings.startScore points and rounds are played until somebody falls
 // to settings.endScore (or settings.maxRounds rounds are done). The highest score wins; a tie at the top means one
 // more round. The dealer moves one seat per round.
+// Eşli okey (variant 'esli'): the two players of a team share one score, the sum of their scores; the match ends when a
+// team falls to settings.teamEndScore and the team with the higher total wins. `winner` is then the first seat of the
+// winning team (0 or 1).
 export class OkeyMatch {
   constructor({ settings, rng = defaultRandom, dealer = 0 } = {}) {
     if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
@@ -23,6 +27,33 @@ export class OkeyMatch {
 
   get over() {
     return this.winner >= 0;
+  }
+
+  get esli() {
+    return this.settings.variant === 'esli';
+  }
+
+  // Eşli okey: the two team scores [seats 0+2, seats 1+3].
+  get teamScores() {
+    return TEAM_SEATS.map(([a, b]) => this.scores[a] + this.scores[b]);
+  }
+
+  // Eşli okey: teams from first to last place, [{ team, seats, score, place }]; null in the classic game.
+  get teams() {
+    if (!this.esli) return null;
+    const ts = this.teamScores;
+    return [0, 1].sort((a, b) => ts[b] - ts[a] || a - b).map((team) => ({ team, seats: TEAM_SEATS[team].slice(), score: ts[team], place: 1 + ts.filter((s) => s > ts[team]).length }));
+  }
+
+  // Eşli okey: the winning team (0 = seats 0+2, 1 = seats 1+3), -1 while the match runs and in the classic game.
+  get winnerTeam() {
+    return this.esli && this.over ? teamOf(this.winner) : -1;
+  }
+
+  // The seats of the winning team (eşli) or of the winner alone; [] while the match is running.
+  get winners() {
+    if (!this.over) return [];
+    return this.esli ? TEAM_SEATS[teamOf(this.winner)].slice() : [this.winner];
   }
 
   // Seats from first to last place: [{ seat, score, place }]; equal scores share a place.
@@ -49,11 +80,17 @@ export class OkeyMatch {
     h.scores.forEach((x, i) => (this.scores[i] += x));
     this.rounds.push({
       dealer: this.dealer, winner: r.winner, reason: r.reason, mode: r.mode ?? null, okeyFinish: !!r.okeyFinish, pair: !!r.pair,
-      fromHand: !!r.fromHand, deltas: h.scores.slice(),
+      fromHand: !!r.fromHand, deltas: h.scores.slice(), winnerTeam: this.esli && r.winner >= 0 ? teamOf(r.winner) : -1,
     });
     this.dealer = (this.dealer + 1) % 4;
+    const maxed = this.settings.maxRounds > 0 && this.rounds.length >= this.settings.maxRounds;
+    if (this.esli) {
+      const ts = this.teamScores;
+      if ((Math.min(...ts) <= this.settings.teamEndScore || maxed) && ts[0] !== ts[1]) this.winner = ts[0] > ts[1] ? 0 : 1;
+      return { over: this.over, winner: this.winner, scores: this.scores.slice() };
+    }
     const top = Math.max(...this.scores);
-    const ended = Math.min(...this.scores) <= this.settings.endScore || (this.settings.maxRounds > 0 && this.rounds.length >= this.settings.maxRounds);
+    const ended = Math.min(...this.scores) <= this.settings.endScore || maxed;
     if (ended && this.scores.filter((s) => s === top).length === 1) this.winner = this.scores.indexOf(top);
     return { over: this.over, winner: this.winner, scores: this.scores.slice() };
   }
@@ -61,7 +98,7 @@ export class OkeyMatch {
   // What `seat` is allowed to see of the whole match (the current round through OkeyHand.view).
   view(seat) {
     const { version, hand, ...pub } = this.toJSON();
-    return { ...pub, seat, over: this.over, standings: this.standings, round: this.rounds.length + (this.counted ? 0 : 1), hand: this.hand && this.hand.view(seat) };
+    return { ...pub, seat, over: this.over, standings: this.standings, teams: this.teams, teamScores: this.esli ? this.teamScores : null, winnerTeam: this.winnerTeam, winners: this.winners, round: this.rounds.length + (this.counted ? 0 : 1), hand: this.hand && this.hand.view(seat) };
   }
 
   // Plain object (JSON safe) with the whole match, the round in progress included.

@@ -134,6 +134,16 @@ function unseenTable(h, seat) {
   h.hands[seat].forEach(see);
   h.discards.flat().forEach(see);
   see(h.indicator);
+  if (h.settings.variant === 'esli') {
+    // tiles another seat took from the discards and has not thrown back are still in that seat's hand (a partner's too)
+    const kept = new Map();
+    for (const l of h.log) {
+      if (l.seat === seat) continue;
+      if (l.type === 'draw' && l.value === 'discard') kept.set(l.tile, l.seat);
+      else if (l.type === 'discard' && kept.get(l.tile) === l.seat) kept.delete(l.tile);
+    }
+    for (const t of kept.keys()) see(t);
+  }
   return (c, n) => Math.max(0, left[idx(c, n)]);
 }
 

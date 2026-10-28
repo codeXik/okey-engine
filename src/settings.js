@@ -1,6 +1,6 @@
 // Every rule that differs between tables is a setting; these are the agreed defaults (docs/KURALLAR.md).
 export const DEFAULT_SETTINGS = {
-  variant: 'klasik', // 'klasik' (4 players, each for themselves); 'esli' (2 against 2) and '101' are planned, not playable yet
+  variant: 'klasik', // 'klasik' (4 players, each for themselves) or 'esli' (2 against 2: seats 0+2 against 1+3); '101' is planned, not playable yet
   aceHigh: true, // a 1 may follow the 13 in a run (12-13-1)
   allowPairs: true, // a hand of seven pairs (çift gitme) may go out
   startScore: 20, // every player starts a match with this many points
@@ -10,12 +10,13 @@ export const DEFAULT_SETTINGS = {
   handMultiplier: 2, // went out with the very first 15 tiles, without drawing (elden bitirme)
   winnerTakes: false, // the winner also gains what the losers lose
   endScore: 0, // a match ends when somebody falls to this score or below
+  teamEndScore: 0, // eşli: a match ends when a team's total (its two players' scores added) falls to this or below
   maxRounds: 0, // a match ends after this many rounds (0 = no limit)
 };
 
 export const VARIANTS = {
   klasik: { seats: 4, teams: false, playable: true },
-  esli: { seats: 4, teams: true, playable: false }, // version 2: seats 0+2 against 1+3
+  esli: { seats: 4, teams: true, playable: true }, // seats 0+2 against 1+3
   101: { seats: 4, teams: false, playable: false }, // version 3: 101 okey
 };
 
@@ -29,8 +30,9 @@ const CHECKS = {
   okeyFinishMultiplier: (x) => isInt(x, 1, 1000),
   pairMultiplier: (x) => isInt(x, 1, 1000),
   handMultiplier: (x) => isInt(x, 1, 1000),
-  winnerTakes: (x) => typeof x === 'boolean',
+  winnerTakes: (x) => typeof x === 'boolean', // eşli: both players of the finishing team gain the penalty
   endScore: (x) => isInt(x, -100000, 100000),
+  teamEndScore: (x) => isInt(x, -200000, 200000),
   maxRounds: (x) => isInt(x, 0, 100000),
 };
 
@@ -42,6 +44,7 @@ export function withDefaults(settings = {}) {
     if (!CHECKS[key](value)) throw new Error(`Bad value for setting ${key}: ${value}`);
   }
   if (out.endScore >= out.startScore) throw new Error('endScore must be below startScore');
+  if (out.teamEndScore >= 2 * out.startScore) throw new Error('teamEndScore must be below twice startScore');
   return out;
 }
 

@@ -15,7 +15,7 @@ Motor şunları yapar:
 
 Masadan masaya değişen her kural ayardan seçilebilir (aşağıda "Ayarlar" bölümüne bakın).
 
-**Sürüm durumu:** klasik okey hazır (1.0.0). Eşli okey (2'ye 2) ve 101 okey sırada; motor bunlara göre kuruldu ama henüz oynanamaz.
+**Sürüm durumu:** klasik okey ve eşli okey (2'ye 2) hazır (1.2.0). 101 okey sırada; motor ona göre kuruldu ama henüz oynanamaz.
 
 ## Hızlı başlangıç
 
@@ -100,6 +100,31 @@ console.log(oyun.winner, oyun.scores);
 
 `oyun.standings` oyuncuların sıralamasını verir: `[{ seat, score, place }]`. `oyun.rounds` her turun özetini tutar.
 
+## Eşli okey (2'ye 2)
+
+`variant: 'esli'` ayarıyla oynanır; oynanış klasikle aynıdır. Koltuk 0+2 bir takım, 1+3 öteki takım; eş karşıda oturur. Bitiren oyuncu ve eşi puan kaybetmez, rakip takımın iki oyuncusu da kaybeder (çarpanlar aynı).
+
+```js
+const oyun = new OkeyMatch({ settings: { variant: 'esli' } });
+while (!oyun.over) {
+  const el = oyun.startRound();
+  while (!el.over) botStep(el, { level: 'normal' });
+  oyun.finishRound();
+}
+console.log(oyun.winnerTeam, oyun.winners, oyun.teamScores);   // örneğin 1, [1, 3], [12, 40]
+```
+
+| Bilgi | Nerede bulunur |
+| --- | --- |
+| İki takımın toplam puanı (`[0+2, 1+3]`; başlangıçta `[40, 40]`) | `oyun.teamScores` |
+| Takım sıralaması: `[{ team, seats, score, place }]` | `oyun.teams` (klasikte `null`) |
+| Kazanan takım (0 ya da 1; oyun sürerken ve klasikte `-1`) | `oyun.winnerTeam` |
+| Kazanan takımın koltukları | `oyun.winners` |
+| Oyuncunun kendi takımı, eşi ve takımlar | `el.view(koltuk)` içinde `team`, `partner`, `teams` (klasikte `null`) |
+| Bir turu hangi takım kazandı | `oyun.rounds[i].winnerTeam` |
+
+Bir takımın puanı, iki oyuncusunun puanının toplamıdır; bir takım `teamEndScore` (varsayılan 0) puana ya da altına inince oyun biter ve toplamı yüksek olan takım kazanır. Oyuncunun görünümünde (`view`) eşinin taşları da yer almaz. `teamOf(koltuk)`, `partnerOf(koltuk)` ve `TEAM_SEATS` dışa açılmıştır. Kayıt, yükleme ve `act` klasikteki gibi çalışır.
+
 ## Kaydetme ve yükleme
 
 Oyun istenen her an kaydedilip daha sonra kaldığı yerden sürdürülebilir. Örneğin eklentinin penceresi kapanıp yeniden açıldığında oyun kaybolmaz:
@@ -155,7 +180,7 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 
 | Ayar | Varsayılan | Anlamı |
 | --- | --- | --- |
-| `variant` | `'klasik'` | Oyun türü (`'esli'` ve `'101'` henüz oynanamaz) |
+| `variant` | `'klasik'` | Oyun türü: `'klasik'` ya da `'esli'` (`'101'` henüz oynanamaz) |
 | `aceHigh` | açık | 13'ten sonra 1 gelebilir (12-13-1 serisi) |
 | `allowPairs` | açık | Yedi çiftle bitmek (çift gitme) serbest |
 | `startScore` | 20 | Oyuna başlangıç puanı |
@@ -164,7 +189,8 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 | `pairMultiplier` | 2 | Çiftle bitirmenin çarpanı |
 | `handMultiplier` | 2 | İlk 15 taşla, çekmeden bitirmenin (elden bitirme) çarpanı |
 | `winnerTakes` | kapalı | Bitiren, kaybedilen puanların toplamını kazanır |
-| `endScore` | 0 | Biri bu puana ya da altına inince oyun biter |
+| `endScore` | 0 | Biri bu puana ya da altına inince oyun biter (klasik) |
+| `teamEndScore` | 0 | Bir takımın toplamı bu puana ya da altına inince oyun biter (eşli) |
 | `maxRounds` | 0 | En çok kaç tur oynanacağı (0 = sınır yok) |
 
 ## Bilgisayar oyuncusu
@@ -175,7 +201,7 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 - **Normal:** Elini seri ve perlere göre değerlendirir; attığı taşla en iyi eli korur, atığı alınca eli iyileşiyorsa alır, ele yedi çift çok yaklaşmışsa çift peşine düşer. Bitebilecekse her zaman biter.
 - **Zor:** Normal gibi, ama zayıflatılmamış oynar ve bir adım ileriye bakar: ortada görülen taşları sayıp hangi taşın gelme olasılığını bilir, atacağı taşı ve atıktan alıp almayacağını eli en çok iyileştirecek şekilde seçer; bir sonraki oyuncunun atıktan aldığı taşlara yarayacak taş atmaktan kaçınır. Ölçüm: 3 normal bilgisayara karşı 800 turun yaklaşık %31'ini aldı (eşit güçte %25 olurdu).
 
-Bilgisayar yalnızca kendi eliyle ve açık bilgilerle (atıklar, gösterge) oynar; rakiplerin taşlarına bakmaz. Hamle başına süre (bir işlemci çekirdeğinde ölçüldü): kolay ~2 ms, normal ~5 ms, zor ~150-250 ms (en kötü durumda 1-3 sn). Sunucuda çok oda varsa zor hamleleri sırayla ve süre sınırı koyarak hesaplatın; tarayıcıda bir Web Worker içinde çalıştırın.
+Bilgisayar yalnızca kendi eliyle ve açık bilgilerle (atıklar, gösterge) oynar; rakiplerin ve eşinin taşlarına bakmaz. Eşli oyunda zor seviye, başkalarının atıktan alıp elinde tuttuğu taşları ortada olmayan taşlar sayar (kurallara göre eşe taş verilemediği için başka bir eş işbirliği yoktur). Hamle başına süre (bir işlemci çekirdeğinde ölçüldü): kolay ~2 ms, normal ~5 ms, zor ~150-250 ms (en kötü durumda 1-3 sn). Sunucuda çok oda varsa zor hamleleri sırayla ve süre sınırı koyarak hesaplatın; tarayıcıda bir Web Worker içinde çalıştırın.
 
 ## Test
 

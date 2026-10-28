@@ -7,6 +7,7 @@ import { withDefaults, DEFAULT_SETTINGS } from '../src/settings.js';
 import { OkeyHand } from '../src/hand.js';
 import { OkeyMatch } from '../src/match.js';
 import { botAction, botStep, handValue } from '../src/bot.js';
+import { teamOf, partnerOf, TEAM_SEATS } from '../src/teams.js';
 
 const seeded = (seed) => () => {
   seed = (seed + 0x6d2b79f5) | 0;
@@ -234,9 +235,10 @@ test('settings: defaults, unknown and bad values, unplayable variants', () => {
   assert.throws(() => withDefaults({ nope: 1 }));
   assert.throws(() => withDefaults({ lossNormal: -1 }));
   assert.throws(() => withDefaults({ endScore: 25 }));
-  assert.throws(() => new OkeyHand({ settings: { variant: 'esli' } }), /not playable/);
   assert.throws(() => new OkeyHand({ settings: { variant: '101' } }), /not playable/);
-  assert.throws(() => new OkeyMatch({ settings: { variant: 'esli' } }), /not playable/);
+  assert.throws(() => new OkeyMatch({ settings: { variant: '101' } }), /not playable/);
+  assert.throws(() => withDefaults({ teamEndScore: 40 }));
+  assert.doesNotThrow(() => new OkeyHand({ settings: { variant: 'esli' } }));
 });
 
 test('scoring: normal, okey finish, pairs, from the hand, multiplied together; deck out scores nothing', () => {
@@ -658,4 +660,142 @@ test('match: maxRounds ends it, a tie at the top plays on, finishRound only afte
   const v = m.view(2);
   assert.equal(v.seat, 2);
   assert.equal(v.round, 2);
+});
+
+// ---- eşli okey (2 against 2) ---------------------------------------------------------------------------
+
+const ESLI = { variant: 'esli' };
+
+test('eşli: teams are 0+2 and 1+3, the partner sits opposite', () => {
+  assert.deepEqual(TEAM_SEATS, [[0, 2], [1, 3]]);
+  assert.deepEqual([0, 1, 2, 3].map(teamOf), [0, 1, 0, 1]);
+  assert.deepEqual([0, 1, 2, 3].map(partnerOf), [2, 3, 0, 1]);
+});
+
+test('eşli scoring: the finisher and the partner pay nothing, both opponents pay; multipliers as in the classic game', () => {
+  const S = withDefaults(ESLI);
+  const base = { reason: 'finish', winner: 1, okeyFinish: false, pair: false, fromHand: false };
+  assert.deepEqual(scoreRound(base, S).deltas, [-2, 0, -2, 0]);
+  assert.deepEqual(scoreRound({ ...base, winner: 2, okeyFinish: true, pair: true }, S).deltas, [0, -8, 0, -8]);
+  assert.deepEqual(scoreRound({ ...base, winner: 0 }, withDefaults({ ...ESLI, winnerTakes: true })).deltas, [2, -2, 2, -2]);
+  assert.deepEqual(scoreRound({ reason: 'deckOut', winner: -1 }, S).deltas, [0, 0, 0, 0]);
+  // the classic game is unchanged
+  assert.deepEqual(scoreRound(base, withDefaults()).deltas, [-2, 0, -2, -2]);
+});
+
+test('eşli round: same play as the classic game; a partner finishing makes the opposing seats pay', () => {
+  const winning = ['Y1a', 'Y2a', 'Y3a', 'B5a', 'B6a', 'B7a', 'B8a', 'K4a', 'K5a', 'K6a', 'R10a', 'R11a', 'R12a', 'R13a'];
+  const h = new OkeyHand({ dealer: 0, deal: fixedDeal([...winning, 'K9a']), settings: ESLI });
+  const r = h.finish(1, 'K9a');
+  assert.equal(r.fromHand, true);
+  assert.deepEqual(h.scores, [-4, 0, -4, 0]); // seat 1 and its partner 3 pay nothing
+});
+
+test('eşli view: team information, and nobody ever sees the partner or the opponents tiles', () => {
+  const h = new OkeyHand({ dealer: 0, rng: seeded(91), settings: ESLI });
+  for (const seat of [0, 1, 2, 3]) {
+    const v = h.view(seat);
+    assert.equal(v.team, seat % 2);
+    assert.equal(v.partner, (seat + 2) % 4);
+    assert.deepEqual(v.teams, [[0, 2], [1, 3]]);
+    const text = JSON.stringify(v);
+    for (const other of [0, 1, 2, 3].filter((x) => x !== seat)) for (const t of h.hands[other]) assert.equal(text.includes(`"${t}"`), false, `seat ${seat} sees ${t} of seat ${other}`);
+    assert.equal(text.includes(h.deck[0]), false);
+  }
+  assert.equal(new OkeyHand({ dealer: 0, rng: seeded(91) }).view(0).team, null);
+});
+
+test('eşli: 150 random rounds keep every tile and score by teams', () => {
+  for (let i = 1; i <= 150; i++) {
+    const rng = seeded(i + 1000);
+    const h = new OkeyHand({ dealer: i % 4, rng, settings: ESLI });
+    while (!h.over) {
+      const seat = h.turn;
+      if (h.phase === 'draw') {
+        const o = h.drawOptions(seat);
+        assert.equal(h.act(seat, { type: 'draw', value: o[Math.floor(rng() * o.length)] }).ok, true);
+      } else {
+        const outs = h.finishOptions(seat);
+        if (outs.length) assert.equal(h.act(seat, { type: 'finish', value: outs[0].tile, mode: outs[0].mode }).ok, true);
+        else assert.equal(h.act(seat, { type: 'discard', value: h.hands[seat][Math.floor(rng() * h.hands[seat].length)] }).ok, true);
+      }
+    }
+    const all = [...h.hands.flat(), ...h.deck, ...h.discards.flat(), h.indicator, ...(h.result.tile ? [h.result.tile] : [])];
+    assert.deepEqual(all.sort(), ALL);
+    if (h.result.reason === 'finish') {
+      const w = h.result.winner;
+      assert.equal(h.scores[w], 0);
+      assert.equal(h.scores[partnerOf(w)], 0);
+      assert.equal(h.scores[(w + 1) % 4], h.scores[(w + 3) % 4]);
+      assert.ok(h.scores[(w + 1) % 4] < 0);
+    } else assert.deepEqual(h.scores, [0, 0, 0, 0]);
+  }
+});
+
+test('eşli match: team scores, teams standings, winnerTeam, round after round until a team is out', () => {
+  for (let g = 0; g < 3; g++) {
+    const m = new OkeyMatch({ settings: ESLI, rng: seeded(g + 200), dealer: g });
+    assert.deepEqual(m.teamScores, [40, 40]);
+    const r = seeded(g + 210);
+    let rounds = 0;
+    while (!m.over) {
+      assert.ok(rounds++ < 300);
+      const h = m.startRound();
+      while (!h.over) botStep(h, { level: g === 0 ? 'kolay' : 'normal', rng: r });
+      const before = m.teamScores;
+      m.finishRound();
+      const after = m.teamScores;
+      assert.equal(m.scores[0] + m.scores[2], after[0]);
+      assert.ok(after[0] <= before[0] && after[1] <= before[1]);
+      assert.ok(after[0] === before[0] || after[1] === before[1]); // only one team loses points in a round
+      const last = m.rounds.at(-1);
+      if (last.reason === 'finish') assert.equal(last.winnerTeam, teamOf(last.winner));
+    }
+    const ts = m.teamScores;
+    assert.ok(Math.min(...ts) <= 0);
+    assert.equal(m.winnerTeam, ts[0] > ts[1] ? 0 : 1);
+    assert.deepEqual(m.winners, TEAM_SEATS[m.winnerTeam]);
+    assert.equal(m.teams[0].team, m.winnerTeam);
+    assert.equal(m.teams[0].place, 1);
+    assert.deepEqual(m.teams[0].seats, TEAM_SEATS[m.winnerTeam]);
+    const v = m.view(2);
+    assert.equal(v.winnerTeam, m.winnerTeam);
+    assert.deepEqual(v.teamScores, ts);
+  }
+  assert.equal(new OkeyMatch().winnerTeam, -1);
+  assert.equal(new OkeyMatch().teams, null);
+});
+
+test('eşli: a match and a round in progress save and load; the future is the same', () => {
+  const m = new OkeyMatch({ settings: { ...ESLI, startScore: 4 }, rng: seeded(230) });
+  const r = seeded(231);
+  while (!m.over) {
+    const h = m.startRound();
+    while (!h.over) {
+      botStep(h, { level: 'normal', rng: r });
+      if (r() < 0.25) {
+        const saved = JSON.parse(JSON.stringify(m));
+        const m2 = OkeyMatch.fromJSON(saved, { rng: seeded(232) });
+        assert.deepEqual(JSON.parse(JSON.stringify(m2)), saved);
+        assert.deepEqual(botAction(m.hand, { level: 'normal', rng: seeded(3) }), botAction(m2.hand, { level: 'normal', rng: seeded(3) }));
+        assert.deepEqual(m2.teamScores, m.teamScores);
+      }
+    }
+    m.finishRound();
+  }
+  assert.ok(m.over);
+});
+
+test('eşli computer (all levels) plays whole rounds', () => {
+  for (const level of ['kolay', 'normal', 'zor']) {
+    for (let g = 0; g < (level === 'zor' ? 1 : 10); g++) {
+      const h = new OkeyHand({ dealer: g % 4, rng: seeded(g + 400), settings: ESLI });
+      const r = seeded(g + 410);
+      let n = 0;
+      while (!h.over) {
+        assert.ok(n++ < 400);
+        assert.ok(botStep(h, { level, rng: r }));
+      }
+    }
+  }
 });

@@ -2,6 +2,7 @@ import { dealRound, defaultRandom, isTile, isOkey, makeTiles, okeyOf } from './t
 import { winningArrangement } from './groups.js';
 import { assertPlayable, withDefaults } from './settings.js';
 import { scoreRound } from './scoring.js';
+import { TEAM_SEATS, partnerOf, teamOf } from './teams.js';
 
 const SAVE_VERSION = 1;
 const seatOk = (s) => Number.isInteger(s) && s >= 0 && s <= 3;
@@ -37,6 +38,11 @@ export class OkeyHand {
 
   get over() {
     return this.phase === 'done';
+  }
+
+  // Eşli okey: seats 0+2 against 1+3.
+  get esli() {
+    return this.settings.variant === 'esli';
   }
 
   // Points of this round per seat (null until it is over).
@@ -95,6 +101,7 @@ export class OkeyHand {
       legal: mine && this.phase === 'discard' ? this.hands[seat].slice() : [],
       finishOptions: mine && this.phase === 'discard' ? this.finishOptions(seat) : [],
       scores: this.scores,
+      team: this.esli ? teamOf(seat) : null, partner: this.esli ? partnerOf(seat) : null, teams: this.esli ? TEAM_SEATS.map((t) => t.slice()) : null,
     };
   }
 
