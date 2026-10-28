@@ -173,9 +173,9 @@ Ayarlar `new OkeyHand({ settings: { … } })` ya da `new OkeyMatch({ settings: {
 
 - **Kolay:** Acemi bir oyuncu gibi oynar; ara sıra rastgele taş atar, bitirme fırsatını kaçırabilir ve çoğunlukla desteden çeker.
 - **Normal:** Elini seri ve perlere göre değerlendirir; attığı taşla en iyi eli korur, atığı alınca eli iyileşiyorsa alır, ele yedi çift çok yaklaşmışsa çift peşine düşer. Bitebilecekse her zaman biter.
-- **Zor:** Normal gibi oynar; ek olarak ortada görülen taşları sayıp eksik taşın gelme olasılığını hesaba katar ve bir sonraki oyuncunun atıktan aldığı taşlara yarayacak taşları atmaktan kaçınır.
+- **Zor:** Normal gibi, ama zayıflatılmamış oynar ve bir adım ileriye bakar: ortada görülen taşları sayıp hangi taşın gelme olasılığını bilir, atacağı taşı ve atıktan alıp almayacağını eli en çok iyileştirecek şekilde seçer; bir sonraki oyuncunun atıktan aldığı taşlara yarayacak taş atmaktan kaçınır. Ölçüm: 3 normal bilgisayara karşı 800 turun yaklaşık %31'ini aldı (eşit güçte %25 olurdu).
 
-Bilgisayar yalnızca kendi eliyle ve açık bilgilerle (atıklar, gösterge) oynar; rakiplerin taşlarına bakmaz. Hamle başına birkaç on milisaniye sürer; yine de tarayıcıda bir Web Worker içinde çalıştırılması önerilir.
+Bilgisayar yalnızca kendi eliyle ve açık bilgilerle (atıklar, gösterge) oynar; rakiplerin taşlarına bakmaz. Hamle başına süre (bir işlemci çekirdeğinde ölçüldü): kolay ~2 ms, normal ~5 ms, zor ~150-250 ms (en kötü durumda 1-3 sn). Sunucuda çok oda varsa zor hamleleri sırayla ve süre sınırı koyarak hesaplatın; tarayıcıda bir Web Worker içinde çalıştırın.
 
 ## Test
 

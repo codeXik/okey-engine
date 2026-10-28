@@ -158,11 +158,64 @@ const without = (hand, tile) => {
   return hand.slice(0, at).concat(hand.slice(at + 1));
 };
 
-function evaluatorFor(h, seat, level) {
-  const aceHigh = h.settings.aceHigh;
-  return level === 'zor' ? makeEvaluator(aceHigh, unseenTable(h, seat)) : makeEvaluator(aceHigh, constantOuts);
+// 'zor': one step of lookahead. For a hand of 14 it estimates what the hand will be worth after drawing one more tile
+// from the unseen ones (weighted by how many copies are still unseen) and throwing the best tile.
+function makeLookahead(h, seat, value) {
+  const left = unseenTable(h, seat);
+  const okeyId = `${h.okey.color}${h.okey.number}a`;
+  const seenWild = h.hands[seat].concat(h.discards.flat()).filter((t) => t === okeyId || t === `${h.okey.color}${h.okey.number}b`).length;
+  const wildLeft = Math.max(0, 2 - seenWild);
+  let total = wildLeft;
+  for (let c = 0; c < 4; c++) for (let n = 1; n <= 13; n++) total += left(c, n);
+  const memo = new Map();
+  return (rest) => {
+    const key = rest.slice().sort().join();
+    if (memo.has(key)) return memo.get(key);
+    const base = value(rest, h.okey);
+    const types = new Set();
+    for (const t of rest) {
+      const m = meaning(t, h.okey);
+      if (!m) continue;
+      const c = COLORS.indexOf(m.color);
+      for (let d = -2; d <= 2; d++) {
+        let n = m.number + d;
+        if (n < 1) n += d < 0 && h.settings.aceHigh ? 13 : 0;
+        if (n > 13) n -= 13;
+        if (n >= 1 && n <= 13) types.add(idx(c, n));
+      }
+      for (let e = 0; e < 4; e++) types.add(idx(e, m.number));
+    }
+    let gain = 0;
+    const distinct = (list) => [...new Set(list)];
+    for (const i of types) {
+      const c = Math.floor(i / 13);
+      const n = (i % 13) + 1;
+      const w = left(c, n);
+      if (!w) continue;
+      const id = c === COLORS.indexOf(h.okey.color) && n === h.okey.number ? 'Fa' : `${COLORS[c]}${n}a`;
+      const mixed = rest.concat(id);
+      let best = base;
+      for (const d of distinct(mixed)) best = Math.max(best, value(without(mixed, d), h.okey));
+      gain += (w / total) * (best - base);
+    }
+    if (wildLeft) {
+      const mixed = rest.concat(okeyId);
+      let best = base;
+      for (const d of distinct(mixed)) best = Math.max(best, value(without(mixed, d), h.okey));
+      gain += (wildLeft / total) * (best - base);
+    }
+    const e = base + gain;
+    memo.set(key, e);
+    return e;
+  };
 }
 
+function evaluatorFor(h, seat, level) {
+  const aceHigh = h.settings.aceHigh;
+  return makeEvaluator(aceHigh, constantOuts);
+}
+
+const LOOKAHEAD_CANDIDATES = 4;
 const pairsWanted = (h, hand14) => h.settings.allowPairs && countPairs(hand14, h.okey) >= 5;
 
 // Which tile to throw from a hand of 15 (when it cannot go out).
@@ -172,15 +225,18 @@ export function botDiscard(h, seat = h.turn, { level = 'normal', rng = Math.rand
   if (level === 'kolay' && rng() < 0.2) return tiles[Math.floor(rng() * tiles.length)];
   const value = evaluatorFor(h, seat, level);
   const aimPairs = level !== 'kolay' && pairsWanted(h, hand.slice(0, 14)) && tiles.some((t) => countPairs(without(hand, t), h.okey) >= 6);
-  const ranked = tiles.map((t) => {
+  const look = level === 'zor' && !aimPairs ? makeLookahead(h, seat, value) : null;
+  let shortlist = tiles;
+  if (look) shortlist = tiles.slice().sort((a, b) => value(without(hand, b), h.okey) - value(without(hand, a), h.okey)).slice(0, LOOKAHEAD_CANDIDATES);
+  const ranked = shortlist.map((t) => {
     const rest = without(hand, t);
-    let score = aimPairs ? countPairs(rest, h.okey) * 10 + value(rest, h.okey) * 0.01 : value(rest, h.okey);
-    if (level === 'zor' && !aimPairs) score -= danger(h, seat, t) * 1.2;
+    let score = aimPairs ? countPairs(rest, h.okey) * 10 + value(rest, h.okey) * 0.01 : look ? look(rest) : value(rest, h.okey);
+    if (level === 'zor' && !aimPairs) score -= danger(h, seat, t) * 0.8;
     if (level === 'kolay') score += (rng() - 0.5) * 12;
     return { t, score };
   }).sort((a, b) => b.score - a.score);
   // 'normal' now and then throws its second choice
-  if (level === 'normal' && ranked.length > 1 && rng() < 0.12) return ranked[1].t;
+  if (level === 'normal' && ranked.length > 1 && rng() < 0.22) return ranked[1].t;
   return ranked[0].t;
 }
 
@@ -198,9 +254,15 @@ export function botDraw(h, seat = h.turn, { level = 'normal', rng = Math.random 
     const after = Math.max(...mixed.map((t) => countPairs(without(mixed, t), h.okey)));
     return after > now ? 'discard' : 'deck';
   }
+  if (level === 'zor') {
+    // what taking the thrown tile gives right away against what a draw from the pile is worth on average
+    const look = makeLookahead(h, seat, value);
+    const taken = Math.max(...[...new Set(mixed)].map((t) => value(without(mixed, t), h.okey)));
+    return taken > look(hand) + 0.3 ? 'discard' : 'deck';
+  }
   const now = value(hand, h.okey);
   const after = Math.max(...[...new Set(mixed)].map((t) => value(without(mixed, t), h.okey)));
-  return after - now >= (level === 'zor' ? 1.8 : 1.5) ? 'discard' : 'deck';
+  return after - now >= 1.5 ? 'discard' : 'deck';
 }
 
 // The action the seat on turn would take, without taking it: { type, value, seq, mode? } for OkeyHand.act,

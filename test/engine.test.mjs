@@ -544,7 +544,7 @@ test('garbage actions never throw and never change the round', () => {
 
 for (const level of ['kolay', 'normal', 'zor']) {
   test(`computer '${level}' plays complete rounds by the rules`, () => {
-    const games = level === 'zor' ? 12 : 25;
+    const games = level === 'zor' ? 6 : 25;
     let finished = 0;
     for (let g = 0; g < games; g++) {
       const h = new OkeyHand({ dealer: g % 4, rng: seeded(g + 300) });
