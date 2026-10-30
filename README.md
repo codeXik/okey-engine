@@ -268,6 +268,8 @@ Testler taşları ve dağıtımı, per/seri/çift çözücüyü (rastgele kurulm
 
 MIT lisansı, © 2026 Skynon Labs Ltd. Motoru kullanan uygulamaların motorun adını (örneğin "Hakkında" ekranında) anması rica edilir; zorunlu değildir.
 
+Bu motor [okey98](https://skynonlabs.com/browser-extensions/okey98/) eklentisinde kullanılır.
+
 ---
 
-*English:* A dependency-free rules engine and computer player for Turkish Okey (a 4-player tile game with an indicator tile, a wild okey and false jokers). Written in plain JavaScript modules, it runs in browsers and in Node.js. MIT licensed. See the code examples above.
+*English:* A dependency-free rules engine and computer player for Turkish Okey (a 4-player tile game with an indicator tile, a wild okey and false jokers). Written in plain JavaScript modules, it runs in browsers and in Node.js. MIT licensed. See the code examples above. It powers the [okey98](https://skynonlabs.com/browser-extensions/okey98/) browser extension.

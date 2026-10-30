@@ -1,5 +1,9 @@
 # Değişiklik kaydı
 
+## 1.3.1 — 30 Ekim 2026
+
+- README'nin sonuna motorun hangi eklentide kullanıldığı yazıldı (okey98). Kodda değişiklik yok.
+
 ## 1.3.0 — 28 Ekim 2026
 
 - Yeni oyun türü **101 okey** (4 kişi, tek tek): ayar `variant: '101'`. 22/21 taşlık dağıtım (deste 20), elini açmak için en az 101 puanlık per ve seri (ya da en az 5 çift), açtıktan sonra masadaki herkesin gruplarına taş işleme ve joker yerine gerçek taşı koyup jokeri alma, atığı alınca açma zorunluluğu, ceza puanı (açmayan 101, açan ise elinde kalan taşlar; okey ve çift çarpanları), 11 turluk ya da puanla biten oyun. Eşli 101 yok.
